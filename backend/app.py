@@ -19,18 +19,16 @@ app.add_middleware(
 )
 
 @app.post("/verificar")
-async def verificar_url(url: str = Form(...)):
-    sb_resultado = safebrowsing_result(url, key)
-    sub_numeros = replace_letters(url)
-    especiais = special_characters(url)
+def analisar_url(url: str = Form(...)):
+    domain = url.split("//")[-1].split("/")[0].lower()
 
-    perigo = sb_resultado.get("encontrada", False) or sub_numeros or especiais
-
-    resultado = {
-        "url": url,
-        "cor": "red" if perigo else "green",
-        "safebrowsing": sb_resultado,
-        "substituicao_numeros": sub_numeros,
-        "caracteres_especiais": especiais
+    return {
+        "safe_browsing": safebrowsing_result(url, key),
+        "leetspeak": replace_letters(domain),
+        "caracteres_especiais": special_characters(url),
+        "levenshtein": levenshtein_distance(domain),
+        "informacoes_sensiveis": sensitive_information(url),
+        "redirecionamento_suspeito": suspicious_redirect(url),
+        "whois": whois_domain(domain),
+        "certificado_ssl": openssl_certificate(domain)
     }
-    return JSONResponse(content=resultado)

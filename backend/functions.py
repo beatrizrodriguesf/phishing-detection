@@ -1,12 +1,13 @@
 import requests
 import json
-import subprocess
 from datetime import datetime
 import Levenshtein
+import whois
 import ssl
-import re
 from bs4 import BeautifulSoup
-from urllib.parse import urlparse
+import socket
+from cryptography import x509
+from cryptography.hazmat.backends import default_backend
 
 def safebrowsing_result(url, key):
     endpoint = f"https://safebrowsing.googleapis.com/v4/threatMatches:find?key={key}"
@@ -42,7 +43,7 @@ def safebrowsing_result(url, key):
         else:
             return {"encontrado": False}
     else:
-        return "Erro na requisição"
+        return {"erro": "Erro na requisição"}
 
 def replace_letters(domain):
     letter_map = {
@@ -82,78 +83,58 @@ def special_characters(url):
         return {"encontrado": False}
 
 def whois_domain(domain):
+    try:
+        w = whois.whois(domain)
 
-    whois_out = subprocess.run(["whois", domain], capture_output=True, text=True).stdout
+        creation_date = w.creation_date
+        if isinstance(creation_date, list):
+            creation_date = creation_date[0]
 
-    for line in whois_out.splitlines():
-        if "Creation Date" in line or "created:" in line.lower() or "Created On" in line:
-            date_str = line.split(": ")[-1].strip()
-            break
-    else:
-        return {"encontrado": False}
+        if not creation_date:
+            return {"encontrado": False}
 
-    for model in ("%Y-%m-%dT%H:%M:%SZ", "%Y-%m-%d", "%d-%b-%Y", "%Y.%m.%d"):
-        try:
-            creation_date = datetime.strptime(date_str, model)
-            break
-        except ValueError:
-            continue
-    else:
-        return ("Erro para extrair data")
+        domain_age = datetime.now().year - creation_date.year
+        return {"encontrado": True, "idade": domain_age}
 
-    domain_age = datetime.now().year - creation_date.year
-    return {"encontrado": True, "idade": domain_age}
+    except Exception as e:
+        return {"erro": f"Erro ao consultar domínio: {e}"}
 
 def openssl_certificate(domain, porta=443):
     try:
-        cmd_sclient = [
-            "openssl", "s_client",
-            "-connect", f"{domain}:{porta}",
-            "-servername", domain,
-            "-showcerts"
-        ]
-        response = subprocess.run(cmd_sclient, capture_output=True, text=True, input='', timeout=10)
+        context = ssl.create_default_context()
+        with socket.create_connection((domain, porta), timeout=10) as sock:
+            with context.wrap_socket(sock, server_hostname=domain) as ssock:
+                der_cert = ssock.getpeercert(binary_form=True)
 
-        cert_raw = re.search(
-            r"-----BEGIN CERTIFICATE-----.*?-----END CERTIFICATE-----",
-            response.stdout, re.DOTALL
-        )
+        cert = x509.load_der_x509_certificate(der_cert, default_backend())
 
-        if not cert_raw:
-            return {"encontrado": False}
+        issuer = cert.issuer.get_attributes_for_oid(x509.NameOID.ORGANIZATION_NAME)
+        sender = issuer[0].value if issuer else "Desconhecido"
 
-        cert_pem = cert_raw.group(0)
+        expiration = cert.not_valid_after_utc
+        valid_from = cert.not_valid_before_utc
 
-        cmd_x509 = ["openssl", "x509", "-noout", "-issuer", "-dates", "-subject", "-ext", "subjectAltName"]
-        proc = subprocess.run(cmd_x509, input=cert_pem, capture_output=True, text=True)
+        try:
+            ext = cert.extensions.get_extension_for_class(x509.SubjectAlternativeName)
+            sans = ext.value.get_values_for_type(x509.DNSName)
+        except x509.ExtensionNotFound:
+            sans = []
 
-        if proc.returncode != 0:
-            print(proc.stderr)
-            return "Erro para pegar informações"
+        match_domain = domain in sans or any(san.startswith("*.") and domain.endswith(san[1:]) for san in sans)
 
-        output = proc.stdout
+        return {
+            "encontrado": True,
+            "emissor": sender,
+            "expiration": expiration.strftime("%d/%m/%Y"),
+            "corresponde": match_domain
+        }
 
-        sender = re.search(r'issuer=.*?O\s*=\s*([^,\n]+)', output)
-        sender = sender.group(1).strip() if sender else 'Desconhecido'
-
-        valid_from = re.search(r'notBefore=(.*)', output)
-
-        expiration = re.search(r'notAfter=(.*)', output)
-        expiration = datetime.strptime(expiration.group(1).strip(), "%b %d %H:%M:%S %Y %Z")
-                                       
-        sans = re.findall(r'DNS:([^\s,]+)', output)
-
-        if domain in sans or any(san.startswith("*.") and domain.endswith(san[1:]) for san in sans):
-            match_domain = True
-        else:
-            match_domain = False
-
-        return {"encontrado": True, "emissor": sender, "expiration": f"{expiration.day:02d}/{expiration.month:02d}/{expiration.year}", "corresponde": match_domain}
-
-    except subprocess.TimeoutExpired:
-        return "Erro timeout ao tentar conectar com OpenSSL"
+    except ssl.SSLError as e:
+        return {"erro": f"Erro SSL: {e}"}
+    except socket.timeout:
+        return {"erro": "Timeout ao tentar conectar com o servidor"}
     except Exception as e:
-        return f"Erro ao analisar certificado: {e}"
+        return {"erro": f"Erro ao analisar certificado: {e}"}
 
 def levenshtein_distance(domain):
     safe_domains = [
@@ -173,6 +154,8 @@ def levenshtein_distance(domain):
 
     if suspicious_matches:
         return {"encontrado": True, "correspondencias": suspicious_matches}
+    else:
+        return {"encontrado": False}
 
 def sensitive_information(url):
     sensitive_input = ['password', 'pass', 'senha', 'username', 'login', 'email', 'username', 'cpf', 'ssn', 'credit', 'card', 'cvv']
@@ -201,7 +184,7 @@ def sensitive_information(url):
             return {"encontrado": False}
 
     except Exception as e:
-        return f"Erro ao analisar conteúdo HTML: {e}"
+        return {"erro": f"Erro ao analisar conteúdo HTML: {e}"}
 
 def suspicious_redirect(url):
     try:
@@ -213,7 +196,10 @@ def suspicious_redirect(url):
         domain_origin = url.split("//")[-1].split("/")[0].lower()
         domain_destiny = destiny.split("//")[-1].split("/")[0].lower()
 
-        return {"encontrado": len(history) > 0, "destino_final": domain_destiny, "suspeito": domain_origin != domain_destiny}
+        if len(history) > 0 or domain_origin == domain_destiny:
+            return {"encontrado": False}
+        else:
+            return {"encontrado": True, "quantidade": len(history) > 0, "destino_final": domain_destiny}
 
     except requests.exceptions.RequestException as e:
-        return "Erro ao realizar GET"
+        return {"erro": "Não foi possível realizar GET"}

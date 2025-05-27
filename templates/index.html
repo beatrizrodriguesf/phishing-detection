@@ -4,6 +4,17 @@
     <meta charset="UTF-8">
     <title>Detector de Phishing</title>
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css">
+    <style>
+        .status-true h5 {
+            color: red;
+        }
+        .status-false h5 {
+            color: green;
+        }
+        .dominio-novo h5 {
+            color: orange;
+        }
+    </style>
 </head>
 <body class="bg-light">
     <div class="container mt-5">
@@ -16,7 +27,7 @@
             <button type="submit" class="btn btn-primary">Verificar</button>
         </form>
 
-        <div id="resultado"></div>
+        <div id="resultado" class="row gy-4"></div>
     </div>
 
     <script>
@@ -24,53 +35,182 @@
             e.preventDefault();
 
             const formData = new FormData(e.target);
-            const response = await fetch("http://localhost:8000/verificar", {
-                method: "POST",
-                body: formData
-            });
-
-            const data = await response.json();
-            const cor = data.cor;
-            const html = `
-                <div class="card">
-                    <div class="card-body">
-                        <h5 class="card-title">Resultado</h5>
-                        <p><strong>URL:</strong> <span style="color: ${cor};">${data.url}</span></p>
-                        <table class="table table-bordered">
-                            <thead>
-                                <tr>
-                                    <th>Verificação</th>
-                                    <th>Resultado</th>
-                                </tr>
-                            </thead>
-                            <tbody>
-                                <tr>
-                                    <td>Listas de phising</td>
-                                    <td>${data.safebrowsing.encontrada ? "Encontrada" : "Não encontrada"}</td>
-                                </tr>
-                                ${
-                                    data.safebrowsing.encontrada
-                                        ? `<tr>
-                                            <td>Tipo de Ameaça</td>
-                                            <td>${data.safebrowsing.tipo}</td>
-                                        </tr>`
-                                        : ""
-                                }
-                                <tr>
-                                    <td>Números substituindo letras</td>
-                                    <td>${data.substituicao_numeros ? "Sim" : "Não"}</td>
-                                </tr>
-                                <tr>
-                                    <td>Caracteres Especiais</td>
-                                    <td>${data.caracteres_especiais ? "Sim" : "Não"}</td>
-                                </tr>
-                            </tbody>
-                        </table>
-                    </div>
+            const resultadoDiv = document.getElementById("resultado");
+            resultadoDiv.innerHTML = `
+                <div class="col-12">
+                    <div class="alert alert-info">Verificando a URL...</div>
                 </div>
             `;
 
-            document.getElementById("resultado").innerHTML = html;
+            try {
+                const response = await fetch("http://localhost:8000/verificar", {
+                    method: "POST",
+                    body: formData
+                });
+
+                if (!response.ok) {
+                    throw new Error("Erro na resposta do servidor.");
+                }
+
+                const data = await response.json();
+
+                const sbStatus = data.safe_browsing.encontrado;
+                const leetStatus = data.leetspeak.encontrado;
+                const charsStatus = data.caracteres_especiais.encontrado;
+                const levenshteinStatus = data.levenshtein.encontrado;
+                const redirectStatus = data.redirecionamento_suspeito.encontrado;
+                const infoSensivelStatus = data.informacoes_sensiveis.encontrado;
+
+                resultadoDiv.innerHTML = `
+                    <div class="col-md-6">
+                        <div class="card status-${sbStatus}">
+                            <div class="card-body">
+                                <h5 class="card-title">Safe Browsing</h5>
+                                <p><strong>Resultado:</strong> ${sbStatus ? "Ameaça detectada" : "Sem ameaças detectadas"}</p>
+                                ${
+                                    sbStatus
+                                        ? Object.entries(data.safe_browsing.matches).map(([match, tipo]) => `
+                                            <div class="mt-4">
+                                                <p class="mb-1"><strong>Match:</strong> ${match}</p>
+                                                <p class="mb-3"><strong>Tipo de ameaça:</strong> ${tipo}</p>
+                                            </div>
+                                        `).join("")
+                                        : ""
+                                }
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="col-md-6">
+                        <div class="card status-${leetStatus}">
+                            <div class="card-body">
+                                <h5 class="card-title">Substituições de letras por números</h5>
+                                <p><strong>Resultado:</strong> ${leetStatus ? "Possível substituição detectada" : "Nenhuma substituição encontrada"}</p>
+                                ${
+                                    leetStatus
+                                        ? Object.entries(data.leetspeak.substituicoes).map(([num, letra]) => `
+                                            <p><strong>${num}</strong> pode estar substituindo <strong>${letra}</strong></p>
+                                        `).join("")
+                                        : ""
+                                }
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="col-md-6">
+                        <div class="card status-${charsStatus}">
+                            <div class="card-body">
+                                <h5 class="card-title">Caracteres Especiais</h5>
+                                <p><strong>Resultado:</strong> ${charsStatus ? "Caracteres especiais encontrados" : "Nenhum caractere especial encontrado"}</p>
+                                ${
+                                    charsStatus
+                                    ? data.caracteres_especiais.caracteres.map(char => `
+                                        <p>Foi encontrado <strong>${char}</strong> na URL.</p>
+                                    `).join("")
+                                    : ""
+                                }
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="col-md-6">
+                        <div class="card status-${levenshteinStatus}">
+                            <div class="card-body">
+                                <h5 class="card-title">Domínios Similares (Levenshtein)</h5>
+                                <p><strong>Resultado:</strong> ${levenshteinStatus ? "Domínio semelhante encontrado" : "Não parece imitar outro domínio"}</p>
+                                ${
+                                    levenshteinStatus
+                                         ? Object.entries(data.levenshtein.correspondencias).map(([dom, dist]) => `
+                                            <div class="mt-4">
+                                                <p class="mb-1"><strong>Domínio semelhante:</strong> ${dom}</p>
+                                                <p class="mb-3"><strong>Distância:</strong> ${dist}</p>
+                                            </div>
+                                        `).join("")
+                                        : ""
+                                }
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="col-md-6">
+                        <div class="card status-${infoSensivelStatus}">
+                            <div class="card-body">
+                                <h5 class="card-title">Informações Sensíveis</h5>
+                                <p><strong>Resultado:</strong> ${infoSensivelStatus ? "Campos sensíveis encontrados" : "Nenhum campo sensível identificado"}</p>
+                                ${
+                                    infoSensivelStatus
+                                        ? data.informacoes_sensiveis.informacoes.map(([nome, tipo]) => `
+                                            <p><strong>Nome do campo:</strong> ${nome || "não especificado"}<br>
+                                            <strong>Tipo:</strong> ${tipo || "não especificado"}</p>
+                                        `).join("")
+                                        : ""
+                                }
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="col-md-6">
+                        <div class="card status-${redirectStatus}">
+                            <div class="card-body">
+                                <h5 class="card-title">Redirecionamento Suspeito</h5>
+                                <p><strong>Resultado:</strong> ${redirectStatus ? "Redirecionamento suspeito detectado" : "Sem redirecionamentos suspeitos"}</p>
+                                ${
+                                    redirectStatus
+                                        ? `
+                                            <p><strong>Domínio final:</strong> ${data.redirecionamento_suspeito.destino_final}</p>
+                                        `
+                                        : ""
+                                }
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="col-md-6">
+                        <div class="card ${data.whois.encontrado ? (data.whois.idade < 1 ? 'dominio-novo' : 'status-false') : 'status-true'}">
+                            <div class="card-body">
+                                <h5 class="card-title">Informações do Domínio (WHOIS)</h5>
+                                <p><strong>Resultado:</strong> ${data.whois.encontrado ? "Domínio encontrado" : "Não foi possível obter informações do domínio"}</p>
+                                ${
+                                    data.whois.encontrado
+                                        ? `<p><strong>Idade do domínio:</strong> ${data.whois.idade} ${data.whois.idade === 1 ? "ano" : "anos"}</p>`
+                                        : ""
+                                }
+                                ${
+                                    data.whois.encontrado && data.whois.idade < 1
+                                        ? `<p class="text-warning"><strong>Atenção:</strong> domínio muito recente!</p>`
+                                        : ""
+                                }
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="col-md-6">
+                        <div class="card ${data.certificado_ssl.encontrado ? (data.certificado_ssl.corresponde ? 'status-false' : 'status-true') : 'status-true'}">
+                            <div class="card-body">
+                                <h5 class="card-title">Certificado SSL (OpenSSL)</h5>
+                                <p><strong>Resultado:</strong> ${data.certificado_ssl.encontrado ? "Certificado encontrado" : "Não foi possível obter certificado"}</p>
+                                ${
+                                    data.certificado_ssl.erro
+                                        ? `<p class="text-danger"><strong>Erro:</strong> ${data.certificado_ssl.erro}</p>`
+                                        : `
+                                            <p class="mb-1"><strong>Emissor:</strong> ${data.certificado_ssl.emissor}</p>
+                                            <p class="mb-1"><strong>Expira em:</strong> ${data.certificado_ssl.expiration}</p>
+                                            <p class="mb-1"><strong>Corresponde ao domínio:</strong> ${data.certificado_ssl.corresponde ? "Sim" : "<span class='text-danger'>Não</span>"}</p>
+                                        `
+                                }
+                            </div>
+                        </div>
+                    </div>
+                `;
+            } catch (error) {
+                resultadoDiv.innerHTML = `
+                    <div class="col-12">
+                        <div class="alert alert-danger">
+                            Erro ao processar a verificação: ${error.message}
+                        </div>
+                    </div>
+                `;
+            }
         });
     </script>
 </body>
