@@ -20,7 +20,7 @@ Instalar as dependências, pode ser feito com o comando abaixo:
 
 `pip install -r requirements.txt`
 
-Criar um arquivo chamado **.env** com o seguinte conteúdo:
+Criar um arquivo chamado **.env** na raiz do repositório com o seguinte conteúdo:
 
 `API_KEY = "Sua chave da API do Safe Browsing"`
 
