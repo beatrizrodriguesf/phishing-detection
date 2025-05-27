@@ -391,7 +391,7 @@
         const ssl = data.certificado_ssl;
         const sslErro = ssl.erro;
         const sslStatus = sslErro ? true : ssl.encontrado && !ssl.corresponde;
-        esquerda.insertAdjacentHTML(
+        direita.insertAdjacentHTML(
           "beforeend",
           `
           <div class="card ${
