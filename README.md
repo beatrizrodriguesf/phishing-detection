@@ -20,6 +20,10 @@ Instalar as dependências, pode ser feito com o comando abaixo:
 
 `pip install -r requirements.txt`
 
+Criar um arquivo chamado **.env** com o seguinte conteúdo:
+
+`API_KEY = "Sua chave da API do Safe Browsing"`
+
 Rodar a API, para isso execute o comando abaixo dentro do diretório **backend** (onde se encontra o arquivo **app.py**).
 
 `fastapi dev app.py`
