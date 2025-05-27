@@ -1,217 +1,389 @@
 <!DOCTYPE html>
 <html lang="pt-br">
 <head>
-    <meta charset="UTF-8">
+    <meta charset="UTF-8" />
     <title>Detector de Phishing</title>
-    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css">
+    <link
+      rel="stylesheet"
+      href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css"
+    />
     <style>
-        .status-true h5 {
-            color: red;
-        }
-        .status-false h5 {
-            color: green;
-        }
-        .dominio-novo h5 {
-            color: orange;
-        }
+      .status-true h5 {
+        color: red;
+      }
+      .status-false h5 {
+        color: green;
+      }
+      .dominio-novo h5 {
+        color: orange;
+      }
     </style>
 </head>
 <body class="bg-light">
-    <div class="container mt-5">
-        <h2 class="mb-4">Detector de Phishing</h2>
-        <form id="urlForm" class="mb-4">
-            <div class="mb-3">
-                <label for="url" class="form-label">Digite a URL:</label>
-                <input type="text" class="form-control" id="url" name="url" required>
-            </div>
-            <button type="submit" class="btn btn-primary">Verificar</button>
-        </form>
+  <div class="container mt-5">
+    <h2 class="mb-4">Detector de Phishing</h2>
+    <form id="urlForm" class="mb-4">
+      <div class="mb-3">
+        <label for="url" class="form-label">Digite a URL:</label>
+        <input type="text" class="form-control" id="url" name="url" required />
+      </div>
+      <button type="submit" class="btn btn-primary">Verificar</button>
+    </form>
 
-        <div id="resultado" class="row gy-4"></div>
+    <div id="status-geral" class="mb-4"></div>
+
+    <div id="resultado" class="row gy-4">
+      <div class="col-md-6 d-flex flex-column gap-4" id="coluna-esquerda"></div>
+      <div class="col-md-6 d-flex flex-column gap-4" id="coluna-direita"></div>
     </div>
+  </div>
 
-    <script>
-        document.getElementById("urlForm").addEventListener("submit", async function (e) {
-            e.preventDefault();
+  <script>
+    document.getElementById("urlForm").addEventListener("submit", async function (e) {
+      e.preventDefault();
 
-            const formData = new FormData(e.target);
-            const resultadoDiv = document.getElementById("resultado");
-            resultadoDiv.innerHTML = `
-                <div class="col-12">
-                    <div class="alert alert-info">Verificando a URL...</div>
-                </div>
-            `;
+      const formData = new FormData(e.target);
+      const esquerda = document.getElementById("coluna-esquerda");
+      const direita = document.getElementById("coluna-direita");
+      const statusGeralDiv = document.getElementById("status-geral");
 
-            try {
-                const response = await fetch("http://localhost:8000/verificar", {
-                    method: "POST",
-                    body: formData
-                });
+      statusGeralDiv.innerHTML = "";
+      esquerda.innerHTML = `<div class="alert alert-info">Verificando a URL...</div>`;
+      direita.innerHTML = "";
 
-                if (!response.ok) {
-                    throw new Error("Erro na resposta do servidor.");
-                }
-
-                const data = await response.json();
-
-                const sbStatus = data.safe_browsing.encontrado;
-                const leetStatus = data.leetspeak.encontrado;
-                const charsStatus = data.caracteres_especiais.encontrado;
-                const levenshteinStatus = data.levenshtein.encontrado;
-                const redirectStatus = data.redirecionamento_suspeito.encontrado;
-                const infoSensivelStatus = data.informacoes_sensiveis.encontrado;
-
-                resultadoDiv.innerHTML = `
-                    <div class="col-md-6">
-                        <div class="card status-${sbStatus}">
-                            <div class="card-body">
-                                <h5 class="card-title">Safe Browsing</h5>
-                                <p><strong>Resultado:</strong> ${sbStatus ? "Ameaça detectada" : "Sem ameaças detectadas"}</p>
-                                ${
-                                    sbStatus
-                                        ? Object.entries(data.safe_browsing.matches).map(([match, tipo]) => `
-                                            <div class="mt-4">
-                                                <p class="mb-1"><strong>Match:</strong> ${match}</p>
-                                                <p class="mb-3"><strong>Tipo de ameaça:</strong> ${tipo}</p>
-                                            </div>
-                                        `).join("")
-                                        : ""
-                                }
-                            </div>
-                        </div>
-                    </div>
-
-                    <div class="col-md-6">
-                        <div class="card status-${leetStatus}">
-                            <div class="card-body">
-                                <h5 class="card-title">Substituições de letras por números</h5>
-                                <p><strong>Resultado:</strong> ${leetStatus ? "Possível substituição detectada" : "Nenhuma substituição encontrada"}</p>
-                                ${
-                                    leetStatus
-                                        ? Object.entries(data.leetspeak.substituicoes).map(([num, letra]) => `
-                                            <p><strong>${num}</strong> pode estar substituindo <strong>${letra}</strong></p>
-                                        `).join("")
-                                        : ""
-                                }
-                            </div>
-                        </div>
-                    </div>
-
-                    <div class="col-md-6">
-                        <div class="card status-${charsStatus}">
-                            <div class="card-body">
-                                <h5 class="card-title">Caracteres Especiais</h5>
-                                <p><strong>Resultado:</strong> ${charsStatus ? "Caracteres especiais encontrados" : "Nenhum caractere especial encontrado"}</p>
-                                ${
-                                    charsStatus
-                                    ? data.caracteres_especiais.caracteres.map(char => `
-                                        <p>Foi encontrado <strong>${char}</strong> na URL.</p>
-                                    `).join("")
-                                    : ""
-                                }
-                            </div>
-                        </div>
-                    </div>
-
-                    <div class="col-md-6">
-                        <div class="card status-${levenshteinStatus}">
-                            <div class="card-body">
-                                <h5 class="card-title">Domínios Similares (Levenshtein)</h5>
-                                <p><strong>Resultado:</strong> ${levenshteinStatus ? "Domínio semelhante encontrado" : "Não parece imitar outro domínio"}</p>
-                                ${
-                                    levenshteinStatus
-                                         ? Object.entries(data.levenshtein.correspondencias).map(([dom, dist]) => `
-                                            <div class="mt-4">
-                                                <p class="mb-1"><strong>Domínio semelhante:</strong> ${dom}</p>
-                                                <p class="mb-3"><strong>Distância:</strong> ${dist}</p>
-                                            </div>
-                                        `).join("")
-                                        : ""
-                                }
-                            </div>
-                        </div>
-                    </div>
-
-                    <div class="col-md-6">
-                        <div class="card status-${infoSensivelStatus}">
-                            <div class="card-body">
-                                <h5 class="card-title">Informações Sensíveis</h5>
-                                <p><strong>Resultado:</strong> ${infoSensivelStatus ? "Campos sensíveis encontrados" : "Nenhum campo sensível identificado"}</p>
-                                ${
-                                    infoSensivelStatus
-                                        ? data.informacoes_sensiveis.informacoes.map(([nome, tipo]) => `
-                                            <p><strong>Nome do campo:</strong> ${nome || "não especificado"}<br>
-                                            <strong>Tipo:</strong> ${tipo || "não especificado"}</p>
-                                        `).join("")
-                                        : ""
-                                }
-                            </div>
-                        </div>
-                    </div>
-
-                    <div class="col-md-6">
-                        <div class="card status-${redirectStatus}">
-                            <div class="card-body">
-                                <h5 class="card-title">Redirecionamento Suspeito</h5>
-                                <p><strong>Resultado:</strong> ${redirectStatus ? "Redirecionamento suspeito detectado" : "Sem redirecionamentos suspeitos"}</p>
-                                ${
-                                    redirectStatus
-                                        ? `
-                                            <p><strong>Domínio final:</strong> ${data.redirecionamento_suspeito.destino_final}</p>
-                                        `
-                                        : ""
-                                }
-                            </div>
-                        </div>
-                    </div>
-
-                    <div class="col-md-6">
-                        <div class="card ${data.whois.encontrado ? (data.whois.idade < 1 ? 'dominio-novo' : 'status-false') : 'status-true'}">
-                            <div class="card-body">
-                                <h5 class="card-title">Informações do Domínio (WHOIS)</h5>
-                                <p><strong>Resultado:</strong> ${data.whois.encontrado ? "Domínio encontrado" : "Não foi possível obter informações do domínio"}</p>
-                                ${
-                                    data.whois.encontrado
-                                        ? `<p><strong>Idade do domínio:</strong> ${data.whois.idade} ${data.whois.idade === 1 ? "ano" : "anos"}</p>`
-                                        : ""
-                                }
-                                ${
-                                    data.whois.encontrado && data.whois.idade < 1
-                                        ? `<p class="text-warning"><strong>Atenção:</strong> domínio muito recente!</p>`
-                                        : ""
-                                }
-                            </div>
-                        </div>
-                    </div>
-
-                    <div class="col-md-6">
-                        <div class="card ${data.certificado_ssl.encontrado ? (data.certificado_ssl.corresponde ? 'status-false' : 'status-true') : 'status-true'}">
-                            <div class="card-body">
-                                <h5 class="card-title">Certificado SSL (OpenSSL)</h5>
-                                <p><strong>Resultado:</strong> ${data.certificado_ssl.encontrado ? "Certificado encontrado" : "Não foi possível obter certificado"}</p>
-                                ${
-                                    data.certificado_ssl.erro
-                                        ? `<p class="text-danger"><strong>Erro:</strong> ${data.certificado_ssl.erro}</p>`
-                                        : `
-                                            <p class="mb-1"><strong>Emissor:</strong> ${data.certificado_ssl.emissor}</p>
-                                            <p class="mb-1"><strong>Expira em:</strong> ${data.certificado_ssl.expiration}</p>
-                                            <p class="mb-1"><strong>Corresponde ao domínio:</strong> ${data.certificado_ssl.corresponde ? "Sim" : "<span class='text-danger'>Não</span>"}</p>
-                                        `
-                                }
-                            </div>
-                        </div>
-                    </div>
-                `;
-            } catch (error) {
-                resultadoDiv.innerHTML = `
-                    <div class="col-12">
-                        <div class="alert alert-danger">
-                            Erro ao processar a verificação: ${error.message}
-                        </div>
-                    </div>
-                `;
-            }
+      try {
+        const response = await fetch("http://localhost:8000/verificar", {
+          method: "POST",
+          body: formData,
         });
-    </script>
+
+        if (!response.ok) throw new Error("Erro na resposta do servidor.");
+
+        const data = await response.json();
+
+        function contarCardsVermelhos() {
+          let count = 0;
+          if (data.safe_browsing.erro || data.safe_browsing.encontrado) count++;
+          if (data.leetspeak.erro || data.leetspeak.encontrado) count++;
+          if (data.caracteres_especiais.erro || data.caracteres_especiais.encontrado) count++;
+          if (data.levenshtein.erro || data.levenshtein.encontrado) count++;
+          if (data.informacoes_sensiveis.erro || data.informacoes_sensiveis.encontrado) count++;
+          if (data.redirecionamento_suspeito.erro || data.redirecionamento_suspeito.encontrado) count++;
+          if (data.whois.erro || (data.whois.encontrado && data.whois.idade < 1)) count++;
+          if (data.certificado_ssl.erro || (data.certificado_ssl.encontrado && !data.certificado_ssl.corresponde)) count++;
+          return count;
+        }
+
+        const urlConsultada = formData.get("url");
+        const safeBrowsingSuspeito = data.safe_browsing.erro || data.safe_browsing.encontrado;
+        const totalVermelhos = contarCardsVermelhos();
+
+        let conclusao = "";
+        let classeConclusao = "";
+
+        if (safeBrowsingSuspeito) {
+          conclusao = "URL SUSPEITA: ameaça detectada pelo Safe Browsing ou erro";
+          classeConclusao = "text-danger";
+        } else if (totalVermelhos >= 4) {
+          conclusao = `URL SUSPEITA: ${totalVermelhos} indicadores vermelhos detectados`;
+          classeConclusao = "text-danger";
+        } else {
+          conclusao = "URL SEGURA";
+          classeConclusao = "text-success";
+        }
+
+        statusGeralDiv.innerHTML = `
+          <h4>URL analisada: <span class="text-primary">${urlConsultada}</span></h4>
+          <h5 class="${classeConclusao}">${conclusao}</h5>
+        `;
+
+        esquerda.innerHTML = "";
+        direita.innerHTML = "";
+
+        // Safe Browsing
+        const sb = data.safe_browsing;
+        const sbErro = sb.erro;
+        const sbStatus = sbErro ? true : sb.encontrado;
+        esquerda.insertAdjacentHTML(
+          "beforeend",
+          `
+          <div class="card status-${sbStatus}">
+            <div class="card-body">
+              <h5 class="card-title">Safe Browsing</h5>
+              ${
+                sbErro
+                  ? `<p class="text-danger"><strong>Erro:</strong> ${sbErro}</p>`
+                  : `
+                <p><strong>Resultado:</strong> ${
+                  sb.encontrado ? "Ameaça detectada" : "Sem ameaças detectadas"
+                }</p>
+                ${
+                  sb.encontrado
+                    ? Object.entries(sb.matches)
+                        .map(
+                          ([match, tipo]) => `
+                    <div class="mt-4">
+                      <p class="mb-1"><strong>Match:</strong> ${match}</p>
+                      <p class="mb-3"><strong>Tipo de ameaça:</strong> ${tipo}</p>
+                    </div>
+                  `
+                        )
+                        .join("")
+                    : ""
+                }
+              `
+              }
+            </div>
+          </div>
+        `
+        );
+
+        // Leetspeak
+        const leet = data.leetspeak;
+        const leetErro = leet.erro;
+        const leetStatus = leetErro ? true : leet.encontrado;
+        esquerda.insertAdjacentHTML(
+          "beforeend",
+          `
+          <div class="card status-${leetStatus}">
+            <div class="card-body">
+              <h5 class="card-title">Substituições de letras por números</h5>
+              ${
+                leetErro
+                  ? `<p class="text-danger"><strong>Erro:</strong> ${leetErro}</p>`
+                  : `
+                <p><strong>Resultado:</strong> ${
+                  leet.encontrado ? "Possível substituição detectada" : "Nenhuma substituição encontrada"
+                }</p>
+                ${
+                  leet.encontrado
+                    ? Object.entries(leet.substituicoes)
+                        .map(
+                          ([num, letra]) =>
+                            `<p><strong>${num}</strong> pode estar substituindo <strong>${letra}</strong></p>`
+                        )
+                        .join("")
+                    : ""
+                }
+              `
+              }
+            </div>
+          </div>
+        `
+        );
+
+        // Caracteres Especiais
+        const chars = data.caracteres_especiais;
+        const charsErro = chars.erro;
+        const charsStatus = charsErro ? true : chars.encontrado;
+        esquerda.insertAdjacentHTML(
+          "beforeend",
+          `
+          <div class="card status-${charsStatus}">
+            <div class="card-body">
+              <h5 class="card-title">Caracteres Especiais</h5>
+              ${
+                charsErro
+                  ? `<p class="text-danger"><strong>Erro:</strong> ${charsErro}</p>`
+                  : `
+                <p><strong>Resultado:</strong> ${
+                  chars.encontrado ? "Caracteres especiais encontrados" : "Nenhum caractere especial encontrado"
+                }</p>
+                ${
+                  chars.encontrado
+                    ? chars.caracteres
+                        .map((char) => `<p>Foi encontrado <strong>${char}</strong> na URL.</p>`)
+                        .join("")
+                    : ""
+                }
+              `
+              }
+            </div>
+          </div>
+        `
+        );
+
+        // Levenshtein
+        const lev = data.levenshtein;
+        const levErro = lev.erro;
+        const levStatus = levErro ? true : lev.encontrado;
+        direita.insertAdjacentHTML(
+          "beforeend",
+          `
+          <div class="card status-${levStatus}">
+            <div class="card-body">
+              <h5 class="card-title">Domínios Similares (Levenshtein)</h5>
+              ${
+                levErro
+                  ? `<p class="text-danger"><strong>Erro:</strong> ${levErro}</p>`
+                  : `
+                <p><strong>Resultado:</strong> ${
+                  lev.encontrado ? "Domínio semelhante encontrado" : "Não parece imitar outro domínio"
+                }</p>
+                ${
+                  lev.encontrado
+                    ? Object.entries(lev.correspondencias)
+                        .map(
+                          ([dom, dist]) => `
+                    <div class="mt-4">
+                      <p class="mb-1"><strong>Domínio semelhante:</strong> ${dom}</p>
+                      <p class="mb-3"><strong>Distância:</strong> ${dist}</p>
+                    </div>
+                  `
+                        )
+                        .join("")
+                    : ""
+                }
+              `
+              }
+            </div>
+          </div>
+        `
+        );
+
+        // Informações Sensíveis
+        const info = data.informacoes_sensiveis;
+        const infoErro = info.erro;
+        const infoStatus = infoErro ? true : info.encontrado;
+        direita.insertAdjacentHTML(
+          "beforeend",
+          `
+          <div class="card status-${infoStatus}">
+            <div class="card-body">
+              <h5 class="card-title">Informações Sensíveis</h5>
+              ${
+                infoErro
+                  ? `<p class="text-danger"><strong>Erro:</strong> ${infoErro}</p>`
+                  : `
+                <p><strong>Resultado:</strong> ${
+                  info.encontrado ? "Campos sensíveis encontrados" : "Nenhum campo sensível identificado"
+                }</p>
+                ${
+                  info.encontrado
+                    ? info.informacoes
+                        .map(
+                          ([nome, tipo]) => `
+                    <p><strong>Nome do campo:</strong> ${nome || "não especificado"}<br />
+                    <strong>Tipo:</strong> ${tipo || "não especificado"}</p>
+                  `
+                        )
+                        .join("")
+                    : ""
+                }
+              `
+              }
+            </div>
+          </div>
+        `
+        );
+
+        // Redirecionamento Suspeito
+        const redirect = data.redirecionamento_suspeito;
+        const redirectErro = redirect.erro;
+        const redirectStatus = redirectErro ? true : redirect.encontrado;
+        direita.insertAdjacentHTML(
+          "beforeend",
+          `
+          <div class="card status-${redirectStatus}">
+            <div class="card-body">
+              <h5 class="card-title">Redirecionamento Suspeito</h5>
+              ${
+                redirectErro
+                  ? `<p class="text-danger"><strong>Erro:</strong> ${redirectErro}</p>`
+                  : `
+                <p><strong>Resultado:</strong> ${
+                  redirect.encontrado ? "Redirecionamento suspeito detectado" : "Sem redirecionamentos suspeitos"
+                }</p>
+                ${
+                  redirect.encontrado ? `<p><strong>Domínio final:</strong> ${redirect.destino_final}</p>` : ""
+                }
+              `
+              }
+            </div>
+          </div>
+        `
+        );
+
+        // WHOIS
+        const whois = data.whois;
+        const whoisErro = whois.erro;
+        const whoisStatus = whoisErro ? true : whois.encontrado && whois.idade < 1;
+        esquerda.insertAdjacentHTML(
+          "beforeend",
+          `
+          <div class="card ${
+            whoisErro ? "status-true" : whois.encontrado ? (whois.idade < 1 ? "dominio-novo" : "status-false") : "status-true"
+          }">
+            <div class="card-body">
+              <h5 class="card-title">Informações do Domínio (WHOIS)</h5>
+              ${
+                whoisErro
+                  ? `<p class="text-danger"><strong>Erro:</strong> ${whoisErro}</p>`
+                  : `
+                <p><strong>Resultado:</strong> ${
+                  whois.encontrado ? "Domínio encontrado" : "Não foi possível obter informações do domínio"
+                }</p>
+                ${
+                  whois.encontrado
+                    ? `<p><strong>Idade do domínio:</strong> ${whois.idade} ${whois.idade === 1 ? "ano" : "anos"}</p>`
+                    : ""
+                }
+                ${
+                  whois.encontrado && whois.idade < 1
+                    ? `<p class="text-warning"><strong>Atenção:</strong> domínio muito recente!</p>`
+                    : ""
+                }
+              `
+              }
+            </div>
+          </div>
+        `
+        );
+
+        // Certificado SSL
+        const ssl = data.certificado_ssl;
+        const sslErro = ssl.erro;
+        const sslStatus = sslErro ? true : ssl.encontrado && !ssl.corresponde;
+        esquerda.insertAdjacentHTML(
+          "beforeend",
+          `
+          <div class="card ${
+            sslErro ? "status-true" : ssl.encontrado ? (ssl.corresponde ? "status-false" : "status-true") : "status-true"
+          }">
+            <div class="card-body">
+              <h5 class="card-title">Certificado SSL (OpenSSL)</h5>
+              ${
+                sslErro
+                  ? `<p class="text-danger"><strong>Erro:</strong> ${sslErro}</p>`
+                  : `
+                <p><strong>Resultado:</strong> ${ssl.encontrado ? "Certificado encontrado" : "Não foi possível obter certificado"}</p>
+                ${
+                  ssl.erro
+                    ? `<p class="text-danger"><strong>Erro:</strong> ${ssl.erro}</p>`
+                    : `
+                  <p class="mb-1"><strong>Emissor:</strong> ${ssl.emissor}</p>
+                  <p class="mb-1"><strong>Expira em:</strong> ${ssl.expiration}</p>
+                  <p class="mb-1"><strong>Corresponde ao domínio:</strong> ${
+                    ssl.corresponde ? "Sim" : "<span class='text-danger'>Não</span>"
+                  }</p>
+                `
+                }
+              `
+              }
+            </div>
+          </div>
+        `
+        );
+      } catch (error) {
+        statusGeralDiv.innerHTML = "";
+        esquerda.innerHTML = `
+          <div class="alert alert-danger">
+            Erro ao processar a verificação: ${error.message}
+          </div>
+        `;
+        direita.innerHTML = "";
+      }
+    });
+  </script>
 </body>
 </html>
