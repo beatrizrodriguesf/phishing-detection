@@ -33,25 +33,29 @@
     <div id="status-geral" class="mb-4"></div>
 
     <div id="resultado" class="row gy-4">
-      <div class="col-md-6 d-flex flex-column gap-4" id="coluna-esquerda"></div>
-      <div class="col-md-6 d-flex flex-column gap-4" id="coluna-direita"></div>
+        <div id="status-verificacao" class="col-12 mb-3"></div> <!-- essa vai ocupar toda largura -->
+        <div class="col-md-6 d-flex flex-column gap-4" id="coluna-esquerda"></div>
+        <div class="col-md-6 d-flex flex-column gap-4" id="coluna-direita"></div>
     </div>
   </div>
 
   <script>
-    document.getElementById("urlForm").addEventListener("submit", async function (e) {
-      e.preventDefault();
+        document.getElementById("urlForm").addEventListener("submit", async function (e) {
+        e.preventDefault();
 
-      const formData = new FormData(e.target);
-      const esquerda = document.getElementById("coluna-esquerda");
-      const direita = document.getElementById("coluna-direita");
-      const statusGeralDiv = document.getElementById("status-geral");
+        const formData = new FormData(e.target);
+        const esquerda = document.getElementById("coluna-esquerda");
+        const direita = document.getElementById("coluna-direita");
+        const statusGeralDiv = document.getElementById("status-geral");
+        const statusVerificacao = document.getElementById("status-verificacao");
 
-      statusGeralDiv.innerHTML = "";
-      esquerda.innerHTML = `<div class="alert alert-info">Verificando a URL...</div>`;
-      direita.innerHTML = "";
+        statusGeralDiv.innerHTML = "";
+        statusVerificacao.innerHTML = `<div class="alert alert-info text-center">Verificando a URL...</div>`;
 
-      try {
+        esquerda.innerHTML = "";
+        direita.innerHTML = "";
+
+        try {
         const response = await fetch("http://localhost:8000/verificar", {
           method: "POST",
           body: formData,
@@ -60,6 +64,8 @@
         if (!response.ok) throw new Error("Erro na resposta do servidor.");
 
         const data = await response.json();
+
+        statusVerificacao.innerHTML = ""; 
 
         function contarCardsVermelhos() {
           let count = 0;
@@ -82,10 +88,10 @@
         let classeConclusao = "";
 
         if (safeBrowsingSuspeito) {
-          conclusao = "URL SUSPEITA: ameaça detectada pelo Safe Browsing ou erro";
+          conclusao = "URL SUSPEITA: ameaça detectada pelo Safe Browsing";
           classeConclusao = "text-danger";
         } else if (totalVermelhos >= 4) {
-          conclusao = `URL SUSPEITA: ${totalVermelhos} indicadores vermelhos detectados`;
+          conclusao = `URL SUSPEITA: ${totalVermelhos} indicadores suspeitos detectados`;
           classeConclusao = "text-danger";
         } else {
           conclusao = "URL SEGURA";
@@ -374,16 +380,17 @@
           </div>
         `
         );
-      } catch (error) {
-        statusGeralDiv.innerHTML = "";
-        esquerda.innerHTML = `
-          <div class="alert alert-danger">
-            Erro ao processar a verificação: ${error.message}
-          </div>
-        `;
-        direita.innerHTML = "";
-      }
-    });
+        } catch (error) {
+            statusVerificacao.innerHTML = "";
+            statusGeralDiv.innerHTML = "";
+            esquerda.innerHTML = `
+            <div class="alert alert-danger">
+                Erro ao processar a verificação: ${error.message}
+            </div>
+            `;
+            direita.innerHTML = "";
+        }
+        });
   </script>
 </body>
 </html>
