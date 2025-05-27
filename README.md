@@ -24,7 +24,7 @@ Rodar a API, para isso execute o comando abaixo dentro do diretório **backend**
 
 `fastapi dev app.py`
 
-Para abrir a página web, foi utilizada a extensão Live Server (ela pode ser instalada no VSCode). Para abrir com O Live Server basta abrir o arquivo **index.html** que está dentro da pasta **templates**, clicar com o botão direito do mouse e selecionar:
+Para abrir a página web, foi utilizada a extensão Live Server (ela pode ser instalada no VSCode). Para abrir com o Live Server basta abrir o arquivo **index.html** que está dentro da pasta **templates**, clicar com o botão direito do mouse e selecionar:
 
  `Open with Live Server`
 
